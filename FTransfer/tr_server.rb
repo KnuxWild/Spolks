@@ -40,12 +40,12 @@ blocks_num = file_description[3].to_i
 timeout = file_description[4].to_i
 
 File.open(file_name,"w") do |file|
-  while (current_block < blocks_num-1) do
+  while (current_block < blocks_num - 1) do
   	begin 
       status = Timeout::timeout(timeout) do
         packet = client.recv(block_size,0)
           while packet.length < block_size do                          # This is needed to be sure, that blocks
-            packet = packet + client.recv(block_size-packet.length,0)  # with block_size (not less) are written
+            packet = packet + client.recv(block_size - packet.length,0)  # with block_size (not less) are written to
           end                                                          # the file
         num = file.write(packet)
         print "."
@@ -54,8 +54,8 @@ File.open(file_name,"w") do |file|
     rescue Timeout::Error
       p "Connection seems to be aborted."
       state = :aborted
+      break
     end
-    break if (state == :aborted)
   end
 end
 

@@ -1,4 +1,5 @@
 require 'socket'
+require 'timeout'
 
 help_array = ["-h","help","--help"] # help info
 if (help_array.include?(ARGV[0]) or !ARGV[0])
@@ -46,13 +47,22 @@ if (server_state[0] == "ready") # server is ready to accept file
   server.send(file_description,0)
   p "Description is sent"
   p "Sending file to server:"
-  while (current_block < blocks_num)
-    packet = file.read(block_size)
-    server.send(packet,0)
-    print "."
-    current_block = current_block + 1
+  while (current_block < blocks_num) do
+    begin 
+      status = Timeout::timeout(timeout) do
+        packet = file.read(block_size)
+        server.send(packet,0)
+        print "."
+        current_block = current_block + 1
+      end
+    rescue Timeout::Error
+      p "Connection seems to be aborted."
+      state = :aborted
+      break
+    end
   end
-  file.close
+end
+file.close
 
   #не дописан case
 #elsif (server_state[0] == "aborted" and server_state[1] == fname) # file reloading
