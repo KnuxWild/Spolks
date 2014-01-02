@@ -1,7 +1,7 @@
 require 'socket'
 
 help_array = ["-h","help","--help"] # help info
-if help_array.include?(ARGV[0])
+if (help_array.include?(ARGV[0]) or !ARGV[0])
   p "Transmission client usage is:"
   p "tr_client.rb [server_IP] [server_port] [file_name] (MTU) (timeout)"
   p "[] - required attribute, () - optional attribute"
@@ -15,7 +15,7 @@ current_block = 0
 if ARGV[3]
   MTU = ARGV[3].to_i
 else
-  MTU = 1400
+  MTU = 14000
 end
 if ARGV[4]
   timeout = ARGV[4].to_i
@@ -31,19 +31,26 @@ fname = fname.last           # to "file"
 blocks_num = file_size / MTU 
 blocks_num = blocks_num + 1 if (file_size - blocks_num * MTU != 0) # block for the rest of file
 # description string "File_name::size::MTU::blocks_num::timeout" is formed here: 
-file_description = fname + "::" + file_size.to_s + "::" + MTU.to_s + "::" + blocks_num.to_s + "::" + timeout
+file_description = fname + "::" + file_size.to_s + "::" + MTU.to_s + "::" + blocks_num.to_s + "::" + timeout.to_s
 
-client = Addrinfo.tcp(address, port) # connecting to server
+client = Addrinfo.tcp(server_address, server_port) # connecting to server
 server = client.connect
-server_state = sever.recv(PR_size) 
+p "Connected"
+
+server_state = server.recv(PR_size) 
 server_state = server_state.split("::") # server_state[0] - state; 
 # server_state[1] - file name; server_state[2] - current block
+p "Server state: #{server_state[0]} #{server_state[1]} #{server_state[2]}"
 
 if (server_state[0] == "ready") # server is ready to accept file
   server.send(file_description,0)
+  p "Description is sent"
   while (current_block < blocks_num)
     packet = file.read(MTU)
     server.send(packet,0)
+    print "#{current_block} "
+    current_block = current_block + 1
+  end
   #не дописан case
 #elsif (server_state[0] == "aborted" and server_state[1] == fname) # file reloading
   #не дописан case
