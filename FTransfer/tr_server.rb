@@ -2,7 +2,7 @@ require 'socket'
 require 'timeout'
 
 help_array = ["-h","help","--help"] #help info
-if help_array.include?(ARGV[0])
+if (help_array.include?(ARGV[0]) or !ARGV[0])
   p "Transmission server usage is:"
   p "tr_server.rb [server_IP] [server_port]"
   exit
@@ -16,19 +16,20 @@ file_name = ""
 current_block = 0
 state = :ready #ready or aborted
 
-def server_state
-  return state.to_s + "::" + file_name + "::" + current_block
-end
-
 server = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM) #oppening connection section
-addr = Socket.sockaddr_in(port, address)
+addr = Addrinfo.tcp(address, port)
 server.bind(addr)
 server.listen(1)
 client_info = server.accept  # client[0] - socket descriptor, client[1] - Addrinfo 
 client = client_info[0] # client socket 
-client.send(server_state)
+
+server_state = state.to_s + "::" + file_name + "::" + current_block.to_s
+
+client.send(server_state,0)
+p "State is sent"
 
 file_description = client.recv(PR_size)
+p "File description: #{file_description}"
 file_description = file_description.split("::")
 # file_description[0] - file_name ; file_description[1] - size; file_description[2] - MTU;
 # file_description[3] - blocks_num; file_description[4] - timeout
@@ -50,7 +51,7 @@ File.open(file_name,"w") do |file|
       p "Connection seems to be aborted."
       state = :aborted
     end
-    break if (state = :aborted)
+    break if (state == :aborted)
   end
 end
 
