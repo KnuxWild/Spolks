@@ -3,7 +3,7 @@ require 'socket'
 help_array = ["-h","help","--help"] # help info
 if (help_array.include?(ARGV[0]) or !ARGV[0])
   p "Transmission client usage is:"
-  p "tr_client.rb [server_IP] [server_port] [file_name] (MTU) (timeout)"
+  p "tr_client.rb [server_IP] [server_port] [file_name] (block_size) (timeout)"
   p "[] - required attribute, () - optional attribute"
   exit
 end
@@ -13,9 +13,9 @@ server_port = ARGV[1].to_i
 file_name = ARGV[2]
 current_block = 0
 if ARGV[3]
-  MTU = ARGV[3].to_i
+  block_size = ARGV[3].to_i
 else
-  MTU = 14000
+  block_size = 14000
 end
 if ARGV[4]
   timeout = ARGV[4].to_i
@@ -28,10 +28,10 @@ file = File.open(file_name) # working with file
 file_size = file.size
 fname = file_name.split("/") # normalizing file name from "/../../file"
 fname = fname.last           # to "file"
-blocks_num = file_size / MTU 
-blocks_num = blocks_num + 1 if (file_size - blocks_num * MTU != 0) # block for the rest of file
-# description string "File_name::size::MTU::blocks_num::timeout" is formed here: 
-file_description = fname + "::" + file_size.to_s + "::" + MTU.to_s + "::" + blocks_num.to_s + "::" + timeout.to_s
+blocks_num = file_size / block_size 
+blocks_num = blocks_num + 1 if (file_size - blocks_num * block_size != 0) # block for the rest of file
+# description string "File_name::size::block_size::blocks_num::timeout" is formed here: 
+file_description = fname + "::" + file_size.to_s + "::" + block_size.to_s + "::" + blocks_num.to_s + "::" + timeout.to_s
 
 client = Addrinfo.tcp(server_address, server_port) # connecting to server
 server = client.connect
@@ -45,17 +45,20 @@ p "Server state: #{server_state[0]} #{server_state[1]} #{server_state[2]}"
 if (server_state[0] == "ready") # server is ready to accept file
   server.send(file_description,0)
   p "Description is sent"
+  p "Sending file to server:"
   while (current_block < blocks_num)
-    packet = file.read(MTU)
+    packet = file.read(block_size)
     server.send(packet,0)
-    print "#{current_block} "
+    print "."
     current_block = current_block + 1
   end
+  file.close
+
   #не дописан case
 #elsif (server_state[0] == "aborted" and server_state[1] == fname) # file reloading
   #не дописан case
 else # server is waiting for another file to be reloaded
-  p "Server is waiting for another file to be reloaded"
+  p "Server is waiting for another file to be uploaded"
 end
   
 
