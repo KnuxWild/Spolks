@@ -40,8 +40,10 @@ p "Connected"
 
 server_state = server.recv(PR_size) 
 server_state = server_state.split("::") # server_state[0] - state; 
-# server_state[1] - file name; server_state[2] - current block
-p "Server state: #{server_state[0]} #{server_state[1]} #{server_state[2]}"
+# server_state[1] - file name; server_state[2] - current block;
+# server_state[3] - block_size
+p "Transferring state: #{server_state[0]}"
+p "The latest file block on server: #{server_state[2]}"
 
 if (server_state[0] == "ready") # server is ready to accept file
   server.send(file_description,0)
@@ -57,16 +59,31 @@ if (server_state[0] == "ready") # server is ready to accept file
       end
     rescue Timeout::Error
       p "Connection seems to be aborted."
-      state = :aborted
+      file.close
       break
     end
   end
-end
-file.close
 
-  #не дописан case
-#elsif (server_state[0] == "aborted" and server_state[1] == fname) # file reloading
-  #не дописан case
+elsif (server_state[0] == "aborted" and server_state[1] == fname) # file reuploading
+  file = File.open(file_name, "r")
+  current_block = server_state[2].to_i
+  block_size = server_state[3].to_i
+  file.read(current_block * block_size)
+  p "Reuploading file:"
+  while (current_block < blocks_num) do
+    begin 
+      status = Timeout::timeout(timeout) do
+        packet = file.read(block_size)
+        server.send(packet,0)
+        print "."
+        current_block = current_block + 1
+      end
+    rescue Timeout::Error
+      p "Connection seems to be aborted."
+      file.close
+      break
+    end
+  end
 else # server is waiting for another file to be reloaded
   p "Server is waiting for another file to be uploaded"
 end
