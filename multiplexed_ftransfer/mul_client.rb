@@ -32,7 +32,6 @@ while (bytes_sent < file_size) do
   server.send(packet,0)
   bytes_sent = bytes_sent + packet.size
   print "." # Здесь будем мутить MSG_OOB и проценты
-  current_block = current_block + 1
 end
 
 
