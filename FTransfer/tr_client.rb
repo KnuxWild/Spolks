@@ -13,17 +13,11 @@ server_address = ARGV[0] # client side params
 server_port = ARGV[1].to_i
 file_name = ARGV[2]
 current_block = 0
-if ARGV[3]
-  block_size = ARGV[3].to_i
-else
-  block_size = 14000
-end
-if ARGV[4]
-  timeout = ARGV[4].to_i
-else
-  timeout = 10
-end
+block_size = (ARGV[3] || "14000").to_i
+timeout = (ARGV[4] || "20").to_i
 PR_size = 1024 # protocol message size
+
+p "block size is #{block_size} and timeout is #{timeout}"
 
 file = File.open(file_name) # working with file
 file_size = file.size
