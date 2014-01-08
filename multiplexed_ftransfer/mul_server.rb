@@ -10,119 +10,70 @@ end
 
 address = ARGV[0]  #server side params
 port = ARGV[1].to_i
-block_size = 1400
-PR_size = 1024 # hardcoded protocol mesage size
+block_size = 102400
 file_name = ""
 current_block = 0
-last_packet = ""
-state = :ready #ready or aborted
+
+connections = {} # hash, where will be stored socket and connection's description     
 
 server = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM) #oppening connection section
 server.setsockopt(Socket::SOL_SOCKET,Socket::SO_REUSEADDR, true)
 addr = Addrinfo.tcp(address, port)  #sockaddr structure
 server.bind(addr)
-server.listen(1)
-client_info = server.accept  # client[0] - socket descriptor, client[1] - Addrinfo 
-client = client_info[0] # client socket 
-p "Connection established"
-server_state = state.to_s + "::" + file_name + "::" + current_block.to_s + "::" + block_size.to_s
-client.send(server_state,0)
-p "Server state is sent"
+server.listen(1) #server socket will listen for new connections
 
-file_description = client.recv(PR_size)
-p "File description: #{file_description}"
-file_description = file_description.split("::")
-# file_description[0] - file_name ; file_description[1] - size; file_description[2] - block_size;
-# file_description[3] - blocks_num; file_description[4] - timeout
-file_name = file_description[0]
-file_size = file_description[1].to_i
-block_size = file_description[2].to_i
-blocks_num = file_description[3].to_i
-timeout = file_description[4].to_i
-
-File.open(file_name,"w") do |file|
-  while (current_block < blocks_num - 1) do
-  	begin 
-      status = Timeout::timeout(timeout) do
-        packet = client.recv(block_size,0)
-          while packet.length < block_size do                          # This is needed to be sure, that blocks
-            packet = packet + client.recv(block_size - packet.length,0)  # with block_size (not less) are written to
-          end                                                          # the file
-        file.write(packet)
-        print "."
-        current_block = current_block + 1
-      end
-    rescue Timeout::Error
-      p "Connection seems to be aborted."
-      state = :aborted
-      file.close
-      break
-    end
-  end
- 
-  last_packet_size = file_size - block_size * (blocks_num-1) # Write the last portion of data which is less than block_size
-  if state == :ready
-    while last_packet.length < last_packet_size do
-      packet = client.recv(block_size,0)
-      last_packet = last_packet + packet
-    end
-    file.write(last_packet)
-  end  
-  server.close
-end
-
-
-# Second part of server which will wait until file will be fully reuploaded
-
-while state == :aborted do # Reuploading file after disconnect
-  p "Waiting for file reuploading"
-
-  server = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM) #oppening connection section
-  server.setsockopt(Socket::SOL_SOCKET,Socket::SO_REUSEADDR, true)
-  addr = Addrinfo.tcp(address, port)  #sockaddr structure
-  server.bind(addr)
-  server.listen(1)
-  client_info = server.accept  # client[0] - socket descriptor, client[1] - Addrinfo 
-  client = client_info[0] # client socket 
-  p "Connection established"
-  server_state = state.to_s + "::" + file_name + "::" + current_block.to_s + "::" + block_size.to_s
-  client.send(server_state,0)
-  p "Server state is sent"
-  state = :ready
-
-  File.open(file_name,"a") do |file|
-    while (current_block < blocks_num - 1) do
-      begin 
-        status = Timeout::timeout(timeout) do
-          packet = client.recv(block_size,0)
-            while packet.length < block_size do                            # This is needed to be sure, that blocks
-              packet = packet + client.recv(block_size - packet.length,0)  # with block_size (not less) are written to
-            end                                                            # the file
-          file.write(packet)
-          print "."
-          current_block = current_block + 1
-        end
-      rescue Timeout::Error
-        p "Connection seems to be aborted."
-        state = :aborted
-        file.close
-        break
+loop do
+  read_sock, _ , err_sock = IO.select(connections.keys.push(server), [], connections.keys)
+    
+    # handling MSG_OOB messages
+    if not err_sock.empty?
+      err_sock.each do |socket|
+        num = socket.recv(1,Socket::MSG_OOB)
+        p "More than #{num} percents of file '#{connections[socket][:name]}' are uploaded"
       end
     end
     
-    last_packet_size = file_size - block_size * (blocks_num-1) # Write the last portion of data which is less than block_size
-    if state == :ready
-      p "Im here, sucker"
-      while last_packet.length < last_packet_size do
-        packet = client.recv(block_size,0)
-        last_packet = last_packet + packet
+    # handling new incoming connections
+    elsif read_sock.include?(server)
+      file = {} # connection description hash :name, :size, :recieved, :fd
+      client_info = server.accept  # client[0] - socket descriptor, client[1] - Addrinfo 
+      client = client_info[0] # client socket 
+      p "New connection established"
+
+      file_description = client.recv(block_size)
+      p "File description: #{file_description}"
+      file_description = file_description.split("::")
+      # file_description[0] - file_name ; file_description[1] - file_size; file_description[2] - block_size;
+      
+      file[:name] = file_description[0]
+      file[:size] = file_description[1].to_i
+      file[:recieved] = 0
+      fd = File.open(file_name,"w")
+      file[:fd] = fd
+      file[:block_size] = (file_description[2] || block_size).to_i
+      connections[client] = file
+      read_sock.delete(server)
+    end
+
+    # recieving data from all sockets and closing all sockets that are done 
+    elsif not read_sock.empty?
+      p "Something is recieved"
+      read_sock.each do |socket|
+        block_size = connections[socket][:block_size]
+        fd = connections[socket][:fd]
+        recieved = connections[socket][:recieved]
+        size = connections[socket][:size]
+
+        data = socket.recv(block_size,0)
+        recieved = recieved + data.size
+        fd.write(data)
+
+        if (recieved >= size) # all data is recieved
+          fd.close
+          socket.shutdown
+          connections.delete(socket)
+        end
+
       end
-      file.write(last_packet)
-    end  
-  end
-  server.close
+    end
 end
-
-
-
-
