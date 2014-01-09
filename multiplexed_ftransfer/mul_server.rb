@@ -66,8 +66,9 @@ loop do
         fd.write(data)
         connections[socket][:recieved] = recieved
 
-        if (recieved >= size) # all data is recieved
-          p "File #{connections[socket][:name]} has been succesfully recieved."
+        if (recieved >= size or data.size == 0) # all data is recieved or connection is aborted
+          p "File #{connections[socket][:name]} has been succesfully recieved." if recieved >= size
+          p "Connection #{connections[socket][:name]} was aborted." if data.size == 0 
           fd.close
           socket.shutdown
           connections.delete(socket)
