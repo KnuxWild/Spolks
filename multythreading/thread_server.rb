@@ -10,7 +10,6 @@ end
 address = ARGV[0]  #server side params
 port = ARGV[1].to_i
 block_size = 102400
-file_name = ""
 current_block = 0
 
 connections = {} # hash, where will be stored socket and connection's description     
