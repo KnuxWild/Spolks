@@ -28,10 +28,9 @@ loop do
     # handling MSG_OOB messages
     if not err_sock.empty?
       err_sock.each do |socket|
-        num = socket.recv(1,Socket::MSG_OOB)
-        p "More than #{num} percents of file '#{connections[socket][:name]}' are uploaded"
+        percentage = socket.recv(1,Socket::MSG_OOB)
+        p "More than #{percentage.ord} percents of file '#{connections[socket][:name]}' have been recieved."
       end
-    end
     
     # handling new incoming connections
     elsif read_sock.include?(server)
@@ -48,16 +47,14 @@ loop do
       file[:name] = file_description[0]
       file[:size] = file_description[1].to_i
       file[:recieved] = 0
-      fd = File.open(file_name,"w")
+      fd = File.open(file[:name],"w")
       file[:fd] = fd
       file[:block_size] = (file_description[2] || block_size).to_i
       connections[client] = file
       read_sock.delete(server)
-    end
 
     # recieving data from all sockets and closing all sockets that are done 
     elsif not read_sock.empty?
-      p "Something is recieved"
       read_sock.each do |socket|
         block_size = connections[socket][:block_size]
         fd = connections[socket][:fd]
@@ -67,13 +64,14 @@ loop do
         data = socket.recv(block_size,0)
         recieved = recieved + data.size
         fd.write(data)
+        connections[socket][:recieved] = recieved
 
         if (recieved >= size) # all data is recieved
+          p "File #{connections[socket][:name]} has been succesfully recieved."
           fd.close
           socket.shutdown
           connections.delete(socket)
         end
-
       end
     end
 end
