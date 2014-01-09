@@ -13,6 +13,7 @@ server_port = ARGV[1].to_i
 file_path = ARGV[2]
 block_size = (ARGV[3] || "102400").to_i
 bytes_sent = 0
+percentage = 10
 
 file = File.open(file_path) # working with file
 file_size = file.size
@@ -31,7 +32,11 @@ while (bytes_sent < file_size) do
   packet = file.read(block_size)
   server.send(packet,0)
   bytes_sent = bytes_sent + packet.size
-  print "." # Здесь будем мутить MSG_OOB и проценты
+  if (bytes_sent > (file_size/100*percentage))
+  	p "More than #{percentage}% of file has been transferred."
+  	server.send(percentage.chr,Socket::MSG_OOB)
+  	percentage = percentage + 10
+  end
 end
 
 
